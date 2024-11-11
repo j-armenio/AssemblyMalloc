@@ -4,21 +4,31 @@
 
 void* topoInicialHeap;
 
-void iniciaAlocador() {
+// Armazena o endereço do topo corrente da heap                             
+void iniciaAlocador() 
+{
     topoInicialHeap = sbrk(0);
     return;
 }
 
-void finalizaAlocador () {
+// Restaura o valor original da heap
+void finalizaAlocador() 
+{
     brk(topoInicialHeap);
     return;
 }
 
-void liberaMem (void* bloco) {
+// Indica que
+int liberaMem(void* bloco) 
+{
     void* p = bloco - 16 * 8;
-    
     p = 0;
 
-    return;
+    return 0;
+}
+
+void* alocaMem(int num_bytes)
+{
+
 }
 
