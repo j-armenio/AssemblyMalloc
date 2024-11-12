@@ -29,6 +29,8 @@ void finalizaAlocador()
 // Aloca um bloco com num_bytes na heap e retorna o endereço inicial desse bloco
 void *alocaMem(int num_bytes)
 {
+    printf("alocaMem CHAMADO! num_bytes: %d\n", num_bytes);
+
     if (num_bytes <= 0) {
         printf("num_bytes inválido.\n");
         return NULL;
@@ -41,6 +43,8 @@ void *alocaMem(int num_bytes)
 
     // (best-fit) Percorre toda a lista e seleciona o nó com menor bloco, que é maior do que o solicitado
     while (posAtual < topoHeap) {
+        printf("ENTROU NO WHILE\n");
+        
         int64_t estado = *(int64_t*)posAtual;
         int64_t tamanho = *((int64_t*)(posAtual + 8));
 
@@ -115,9 +119,9 @@ void imprimeMapa()
         for (int i = 0; i < 16; i++) {
             printf("#"); // Representa os metadados
         }
-        // for (int i = 0; i < tamanho - 16; i++) {
-        //      printf(estado ? "+" : "-"); // + para ocupado, - para livre
-        // }
+        for (int i = 0; i < tamanho - 16; i++) {
+            printf(estado ? "+" : "-"); // + para ocupado, - para livre
+        }
         printf("]\n");
 
         atual += tamanho; // Move para o próximo bloco
@@ -129,11 +133,10 @@ int main()
 {
     iniciaAlocador();
 
-    void *bloco1 = alocaMem(500);
-    void *bloco2 = alocaMem(200);
-    printf("bloco1: %p, bloco2: %p\n", bloco1, bloco2);
+    printf("topoInicialHeap: %p\n", topoInicialHeap);
 
-    imprimeMapa();
+    void *bloco1 = alocaMem(500);
+    printf("bloco1: %p\n", bloco1);
 
     // finalizaAlocador();
     return 0;
