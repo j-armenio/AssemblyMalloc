@@ -1,16 +1,16 @@
 #include <stdio.h>
-#include <stdint.h>
-#include <inttypes.h>
 #include <unistd.h>
+#include <stdint.h>
 #include "meuAlocador.h"
 
 // Bloco:
 // | estado(8 bytes) | tamanho(8 bytes) | dados(até 4096 bytes) |
 
 void *topoInicialHeap = NULL;
+void *aux = NULL;
 
 // Armazena o endereço do topo corrente da heap e armazena em topoInicialHeap
-void iniciaAlocador() 
+void iniciaAlocador()
 {
     topoInicialHeap = sbrk(0);
     return;
@@ -20,51 +20,47 @@ void iniciaAlocador()
 void finalizaAlocador()
 {
     if (brk(topoInicialHeap) == 0)
-        printf("Heap restaurada com sucesso.\n");
+        return;
     else
         printf("Erro ao restaurar heap.\n");
+        return;
     return;
 }
 
 // Aloca um bloco com num_bytes na heap e retorna o endereço inicial desse bloco
 void *alocaMem(int num_bytes)
 {
-    printf("alocaMem CHAMADO! num_bytes: %d\n", num_bytes);
-
     if (num_bytes <= 0) {
-        printf("num_bytes inválido.\n");
+        printf("Número de bytes inválido.\n");
         return NULL;
     }
 
+    void *posAtualHeap = topoInicialHeap;
+    void *topoAtualHeap = sbrk(0);
+
     void *blocoLivre = NULL;
-    void *posAtual = topoInicialHeap;
-    void *topoHeap = sbrk(0);
     int64_t menorTamanho = __INT64_MAX__;
 
-    // (best-fit) Percorre toda a lista e seleciona o nó com menor bloco, que é maior do que o solicitado
-    while (posAtual < topoHeap) {
-        printf("ENTROU NO WHILE\n");
-        
-        int64_t estado = *(int64_t*)posAtual;
-        int64_t tamanho = *((int64_t*)(posAtual + 8));
+    // (best-fit) Percorre toda a heap e seleciona o nó com menor bloco, que é maior do que o solicitado    
+    while (posAtualHeap < topoInicialHeap) { // Começa da posição atual da Heap até seu inicio
+        int64_t estado = *(int64_t*)posAtualHeap;
+        int64_t tamanho = *(int64_t*)(posAtualHeap+8);
 
-        if ((estado == 0) && (tamanho >= (num_bytes + 16)) && (tamanho < menorTamanho)) {
-            blocoLivre = posAtual;
+        if (estado == 0 && tamanho >= (num_bytes+16) && tamanho < menorTamanho) {
+            blocoLivre = posAtualHeap;
             menorTamanho = tamanho;
         }
 
-        // Move para próximo bloco
-        posAtual += tamanho;
+        posAtualHeap += tamanho;
     }
 
-    // Se encontrou bloco adequado
+    // se encontrou um bloco adequado
     if (blocoLivre) {
-        *(int64_t*)blocoLivre = 1; // Marca como ocupado
+        *(int64_t*)blocoLivre = 1; // Marca 'estado' como ocupado
         return blocoLivre + 16;
-    } 
-    else { // Não encontrou bloco adequado
+    }
+    else { // Não encontrou um bloco adequado
         int64_t novoTamanho = (((num_bytes + 16) + 4095) / 4096) * 4096; // Ajuste para múltiplos de 4096 bytes
-        printf("novo tamanho: %" PRId64 "\n", novoTamanho);
         void *novoBloco = sbrk(novoTamanho);
 
         if (novoBloco == (void*)-1) {
@@ -72,48 +68,49 @@ void *alocaMem(int num_bytes)
             return NULL;
         }
 
-        *(int64_t*)novoBloco = 1;                   // Marca como ocupado
-        *((int64_t*)(novoBloco + 8)) = novoTamanho; // Armazena tamanho do bloco
-
+        *(int64_t*)novoBloco = 1;
+        *((int64_t*)(novoBloco+8)) = novoTamanho;
+        
         return novoBloco + 16;
     }
 }
 
 // Devolve para heap o bloco alocado
-int liberaMem(void *bloco) 
+int liberaMem(void *bloco)
 {
     if (!bloco) {
-        printf("Erro.\n");
+        // Aqui, o certo seria dar um aviso de erro, porém quando eu dou printf, ele altera a heap e o brk é
+        // alterado, oq fode com o malloc. Não sei como resolver, mas acho que em assembly n tem esse problema.
+        // Alias, em teoria o -1 já seria sinal de erro suficiente, msm sem o printf
+        // printf("Erro no ponteiro de bloco.\n");
         return -1;
     }
 
-    void *inicioBloco = bloco - 16;
+    void *inicioBloco = bloco-16;
     int64_t estado = *(int64_t*)inicioBloco;
 
     if (estado == 0) {
-        printf("Bloco já está livre.\n");
-        return -1;
+        // Msm coisa aqui.
+        // printf("Bloco já está livre.\n");
+        return -2;
     }
 
     *(int64_t*)inicioBloco = 0; // Marca como livre
 
-    printf("Bloco liberado no endereço: %p\n", bloco);
     return 0;
 }
 
 // Imprime um mapa da memória da região da heap
-void imprimeMapa() 
+void imprimeMapa()
 {
     void *topoHeap = sbrk(0);
     void *atual = topoInicialHeap;
-    
+
     printf("Mapa da heap:\n");
 
     while (atual < topoHeap) {
         int64_t estado = *(int64_t*)atual;
         int64_t tamanho = *((int64_t*)(atual + 8));
-
-        printf("endereço: %p, estado: %" PRId64 ", tamanho: %" PRId64 "", atual, estado, tamanho);
 
         printf("[");
         for (int i = 0; i < 16; i++) {
@@ -129,15 +126,26 @@ void imprimeMapa()
     printf("\n");
 }
 
-int main() 
-{
+int main()
+{   
     iniciaAlocador();
 
-    printf("topoInicialHeap: %p\n", topoInicialHeap);
-
     void *bloco1 = alocaMem(500);
-    printf("bloco1: %p\n", bloco1);
+    void *bloco2 = alocaMem(400);
 
-    // finalizaAlocador();
+    // PROBLEMA: mesmo problema do printf. Quando o printf é chamado, ele altera a heap, e altera o brk,
+    // isso faz com que se você usa o imprimeMapa() AQUI, ele vai imprimir corretamente, porém quando você
+    // tentar fazer o liberaMem(), ele vai dar merda, pq o endereço da heap mudou, e ela não está mais organizada
+    // bonitinha em bloquinhos, está com um vetor que o printf colocou no meio, e caga tudo. Novamente, eu
+    // acho que a impressão do assembly não altera a heap, então talvez la não tenha esse problema, mas em 
+    // C, nessa implementação não sei como resolver.
+
+    liberaMem(bloco1);
+    liberaMem(bloco2);
+
+    imprimeMapa();
+
+    finalizaAlocador();
+
     return 0;
 }
