@@ -41,17 +41,19 @@ void *alocaMem(int num_bytes)
     void *blocoLivre = NULL;
     int64_t menorTamanho = __INT64_MAX__;
 
-    // (best-fit) Percorre toda a heap e seleciona o nó com menor bloco, que é maior do que o solicitado    
-    while (posAtualHeap < topoInicialHeap) { // Começa da posição atual da Heap até seu inicio
-        int64_t estado = *(int64_t*)posAtualHeap;
-        int64_t tamanho = *(int64_t*)(posAtualHeap+8);
+    int64_t estado, tamanho;
+
+    // (best-fit) Percorre toda a heap e seleciona o nó com menor bloco, que é maior do que o solicitado
+    while (posAtualHeap < topoAtualHeap) { // Começa da posição atual da Heap até seu inicio
+        estado = *(int64_t*)posAtualHeap;
+        tamanho = *(int64_t*)(posAtualHeap+8);
 
         if (estado == 0 && tamanho >= (num_bytes+16) && tamanho < menorTamanho) {
             blocoLivre = posAtualHeap;
             menorTamanho = tamanho;
         }
 
-        posAtualHeap += tamanho;
+        posAtualHeap += (tamanho/4096 + 1 + 16);
     }
 
     // se encontrou um bloco adequado
@@ -60,8 +62,8 @@ void *alocaMem(int num_bytes)
         return blocoLivre + 16;
     }
     else { // Não encontrou um bloco adequado
-        int64_t novoTamanho = (((num_bytes + 16) + 4095) / 4096) * 4096; // Ajuste para múltiplos de 4096 bytes
-        void *novoBloco = sbrk(novoTamanho);
+        int64_t novoTamanho = (((num_bytes) + 4095) / 4096) * 4096; // Ajuste para múltiplos de 4096 bytes
+        void *novoBloco = sbrk(novoTamanho + 16);
 
         if (novoBloco == (void*)-1) {
             printf("Erro ao alocar bloco.\n");
@@ -69,7 +71,7 @@ void *alocaMem(int num_bytes)
         }
 
         *(int64_t*)novoBloco = 1;
-        *((int64_t*)(novoBloco+8)) = novoTamanho;
+        *((int64_t*)(novoBloco+8)) = num_bytes;
         
         return novoBloco + 16;
     }
@@ -79,10 +81,6 @@ void *alocaMem(int num_bytes)
 int liberaMem(void *bloco)
 {
     if (!bloco) {
-        // Aqui, o certo seria dar um aviso de erro, porém quando eu dou printf, ele altera a heap e o brk é
-        // alterado, oq fode com o malloc. Não sei como resolver, mas acho que em assembly n tem esse problema.
-        // Alias, em teoria o -1 já seria sinal de erro suficiente, msm sem o printf
-        // printf("Erro no ponteiro de bloco.\n");
         return -1;
     }
 
@@ -90,8 +88,6 @@ int liberaMem(void *bloco)
     int64_t estado = *(int64_t*)inicioBloco;
 
     if (estado == 0) {
-        // Msm coisa aqui.
-        // printf("Bloco já está livre.\n");
         return -2;
     }
 
@@ -126,26 +122,29 @@ void imprimeMapa()
     printf("\n");
 }
 
-int main()
-{   
-    iniciaAlocador();
+int main (long int argc, char** argv) {
+    void *a, *b, *c;
 
-    void *bloco1 = alocaMem(500);
-    void *bloco2 = alocaMem(400);
+    iniciaAlocador();               // Impressão esperada
+    // imprimeMapa();                  // <vazio>
 
-    // PROBLEMA: mesmo problema do printf. Quando o printf é chamado, ele altera a heap, e altera o brk,
-    // isso faz com que se você usa o imprimeMapa() AQUI, ele vai imprimir corretamente, porém quando você
-    // tentar fazer o liberaMem(), ele vai dar merda, pq o endereço da heap mudou, e ela não está mais organizada
-    // bonitinha em bloquinhos, está com um vetor que o printf colocou no meio, e caga tudo. Novamente, eu
-    // acho que a impressão do assembly não altera a heap, então talvez la não tenha esse problema, mas em 
-    // C, nessa implementação não sei como resolver.
+    a = (void *) alocaMem(8200);
+    // imprimeMapa();                  // ################**********
+    b = (void *) alocaMem(4);
+    // imprimeMapa();                  // ################**********##############****
+    aux = sbrk(0);
+    liberaMem(a);
+    // imprimeMapa();                  // ################----------##############****
+    aux = sbrk(0);
+    
+    c = (void*)alocaMem(4000);
+    
+    liberaMem(b);                   // ################----------------------------
+    aux = sbrk(0);
 
-    liberaMem(bloco1);
-    liberaMem(bloco2);
-
-    imprimeMapa();
-
+    liberaMem(c);                   // ################----------------------------
+    aux = sbrk(0);
+                                    // ou
+                                    // <vazio>
     finalizaAlocador();
-
-    return 0;
 }
