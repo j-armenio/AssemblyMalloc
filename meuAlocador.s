@@ -1,6 +1,11 @@
 .section .data
 
     topoInicialHeap: .quad 0
+    
+    erroFinaliza: .string "Erro ao restaurar heap.\n"
+    erroNumBytes: .string "Número de bytes inválido.\n"
+    erroAloca: .string "Erro ao alocar bloco.\n"
+
     aux: .quad 0
 
 .section .text
@@ -18,9 +23,15 @@ finalizaAlocador:
     movq topoInicialHeap, %rdi          # define novo valor de brk
     syscall
     movq topoInicialHeap, %rax          
+    
     cmpq $0, %rax                       # if ret syscall = 0
-    je fim_if_fin
-                                        # colocar mensagem de erro
+    jne fim_if_fin
+    
+    movq $1, %rax                       # write    
+    movq $1, %rdi                       # stdout
+    movq $erroFinaliza, %rsi            # inicio do buffer
+    movq $25, %rdx                      # tam do buffer
+    syscall
 fim_if_fin:
     ret
     
@@ -31,7 +42,13 @@ alocaMem:
     movq 16(%rbp), %rax
     cmpq $0, %rax                       # if num_bytes <= 0
     jg fim_if_num0
-                                        # colocar mensagem de erro
+    
+    movq $1, %rax                       # write  
+    movq $1, %rdi                       # stdout                                
+    movq $erroNumBytes, %rsi            # inicio do buffer                      
+    movq $28, %rdx                      # tam do buffer                         
+    syscall 
+   
     movq $0, %rax
     popq %rbp
     ret 
@@ -105,8 +122,14 @@ else_bloco_livre:
     syscall
     
     cmpq $0, %rax
-    je alocou                           # if retorno de brk != 0
-                                        # mensagem de erro
+    jne alocou                           # if retorno de brk != 0
+    
+    movq $1, %rax                       # write                                 
+    movq $1, %rdi                       # stdout                                
+    movq $erroAloca, %rsi               # inicio do buffer                      
+    movq $28, %rdx                      # tam do buffer                         
+    syscall
+
     addq $32, %rsp                      # desaloca variaveis
     movq $0, %rax                       # retorno = NULL
     popq %rbp                           # restaura %rbp
@@ -121,7 +144,7 @@ alocou:
     
     addq $8, %r10                       # %r10 = novoBloco + 8 + 8
     movq %r10, %rax                     # retorno = novoBloco + 16
-    subq $32, %rsp                      # desaloca variaveis
+    addq $32, %rsp                      # desaloca variaveis
     popq %rbp                           # restaura %rbp
     ret
 
