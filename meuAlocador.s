@@ -6,10 +6,18 @@
     erroNumBytes: .string "Número de bytes inválido.\n"
     erroAloca: .string "Erro ao alocar bloco.\n"
 
+    mapaHeap: .string "Mapa da heap:\n"
+    cabeca: .string "################"
+    livre: .string "-"
+    ocup: .string "+"
+    newL: .string "\n"
+
     aux: .quad 0
 
 .section .text
 .globl _start
+
+################################################################################
 
 iniciaAlocador:
     movq $12, %rax                      # escolhe o tipo de syscall
@@ -34,6 +42,8 @@ finalizaAlocador:
     syscall
 fim_if_fin:
     ret
+
+################################################################################
     
 alocaMem:
     pushq %rbp
@@ -65,7 +75,7 @@ fim_if_num0:
     movq $0, -24(%rbp)                  # blocoLivre = NULL em -24(%rbp)
     movq $4096, -32(%rbp)               # menorTamanho = 4096 em -32(%rbp)    
 
-while:
+while_aloca:
     movq -8(%rbp), %rax                 
     cmpq %rax, -16(%rbp)                # while posAtualHeap < topoAtualHeap
 	jge fim_while_aloca
@@ -93,6 +103,8 @@ fim_if_while:
     shl $12, %r11                       # tamanho * 4096 
     addq $16, %r11                      # tamanho + 16
     addq %r11, -8(%rbp)                 # posAtualHeap = tamanho                 
+
+    jmp while_aloca
 
 fim_while_aloca:
     cmpq $0, -24(%rbp)                  
@@ -148,6 +160,8 @@ alocou:
     popq %rbp                           # restaura %rbp
     ret
 
+################################################################################
+
 liberaMem:
     pushq %rbp
     movq %rsp, %rbp                     
@@ -176,6 +190,93 @@ ta_ocupado:
     movq $0, %rax                       # retorno = 0
     ret
     
+################################################################################
+
+imprimeMapa:
+    pushq %rbp
+    movq %rsp, %rbp
+    subq $16, %rsp                      # alocando variáveis
+    
+    movq $12, %rax
+    movq $0, %rdi
+    syscall
+    movq %rax, -8(%rbp)                 # topoHeap = sbrk(0) em -8(%rbp)
+    movq topoInicialHeap, %rax 
+    movq %rax, -16(%rbp)                # atual = topoInicialHeap em -16(%rbp)
+
+    movq $1, %rax                       # write                                 
+    movq $1, %rdi                       # stdout                                
+    movq $mapaHeap, %rsi                # inicio do buffer                      
+    movq $15, %rdx                      # tam do buffer                         
+    syscall 
+
+whileMapa:
+    movq -16(%rbp), %rax
+    movq -8(%rbp), %rbx
+    cmpq %rax, -8(%rbp)                 # if atual < topoHeap
+    jge fim_while_mapa    
+
+    movq (%rax), %r10                   # %r10 = estado                         
+    addq $8, %rax                                                               
+    movq (%rax), %r11                   # %r11 = tamanho
+
+    movq $1, %rax                       # write                                 
+    movq $1, %rdi                       # stdout                                
+    movq $cabeca, %rsi                  # inicio do buffer                      
+    movq $17, %rdx                      # tam do buffer                         
+    syscall 
+
+    movq $0, %rbx                       # i = 0
+
+    cmpq $0, %r10                       # if estado == livre
+    jne for_tamanho_ocup
+
+for_tamanho_livre:
+    cmpq %rbx, %r11                     # if i < tamanho
+    jge fim_fors
+
+    movq $1, %rax                       # write
+    movq $1, %rdi                       # stdout
+    movq $livre, %rsi                   # inicio do buffer
+    movq $1, %rdx                       # tam do buffer
+    syscall
+
+    addq $1, %rbx                       # i++
+
+for_tamanho_ocup:
+    cmpq %rbx, %r11                     # if i < taamnho
+    jge fim_fors
+    
+    movq $1, %rax                       # write                                 
+    movq $1, %rdi                       # stdout                                
+    movq $ocup, %rsi                    # inicio do buffer                      
+    movq $1, %rdx                       # tam do buffer                         
+    syscall   
+
+    addq $1, %rbx
+
+fim_fors:  
+    shr $12, %r11                       # tamanho = tamanho / 4096
+    addq $1, %r11                       # tamanho++
+    shl $12, %r11                       # tamanho * 4096 
+    addq $16, %r11                      # tamanho + 16
+    addq %r11, -16(%rbp)                # atual  = tamanho                 
+        
+    jmp whileMapa     
+
+fim_while_mapa:
+   
+    movq $1, %rax                       # write                                 
+    movq $1, %rdi                       # stdout                                
+    movq $newL, %rsi                    # inicio do buffer                      
+    movq $3, %rdx                       # tam do buffer                         
+    syscall 
+
+    addq $16, %rsp                      # desaloca variáveis
+    popq %rbp                           # restaura %rbp
+    ret 
+
+################################################################################
 _start:
     pushq %rbp
     movq %rsp, %rbp    
@@ -191,22 +292,30 @@ _start:
     addq $8, %rsp                       # libera espaço do parametro
     movq %rax, -8(%rbp)                 # retorno da função no bloco 1
    
+    call imprimeMapa
+
     movq $400, %rax                     
     pushq %rax                          # empilha parametro
     call alocaMem
     addq $8, %rsp                       # libera espaço do parametro
     movq %rax, -16(%rbp)                # retorno da função no bloco 2
       
+    call imprimeMapa
+
     movq -8(%rbp), %rax                     
     pushq %rax                          # empilha parametro
     call liberaMem
     addq $8, %rsp                       # libera espaço do parametro
+
+    call imprimeMapa
 
     movq -16(%rbp), %rax                     
     pushq %rax                          # empilha parametro
     call liberaMem
     addq $8, %rsp                       # libera espaço do parametro
     
+    call imprimeMapa
+
     call finalizaAlocador
 
     addq $16, %rsp

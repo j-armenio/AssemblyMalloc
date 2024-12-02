@@ -112,12 +112,12 @@ void imprimeMapa()
         for (int i = 0; i < 16; i++) {
             printf("#"); // Representa os metadados
         }
-        for (int i = 0; i < tamanho - 16; i++) {
+        for (int i = 0; i < tamanho; i++) {
             printf(estado ? "+" : "-"); // + para ocupado, - para livre
         }
         printf("]\n");
 
-        atual += tamanho; // Move para o próximo bloco
+        atual +=  (((tamanho) + 4095) / 4096) * 4096 + 16; // Move para o próximo bloco
     }
     printf("\n");
 }
