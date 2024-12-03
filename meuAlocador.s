@@ -25,6 +25,8 @@ iniciaAlocador:
     syscall
     movq %rax, topoInicialHeap
     ret
+
+################################################################################
     
 finalizaAlocador:
     movq $12, %rax                      # escolhe o tipo de syscall (brk)
@@ -69,7 +71,7 @@ alocaMem:
 
 fim_if_num0:
     movq topoInicialHeap, %rax          
-    movq %rax, -8(%rbp)                 # posAtualHeap em -8(%rbp)   
+    movq %rax, -8(%rbp)                 # -8(%rbp) <- posAtualHeap
     
     movq $12, %rax                      # escolhe o tipo de syscall (brk)
     movq $0, %rdi                       # para retornar o valor atual 
@@ -77,12 +79,12 @@ fim_if_num0:
     movq %rax, -16(%rbp)                # topoAtualHeap em -16(%rbp) 
     
     movq $0, -24(%rbp)                  # blocoLivre = NULL em -24(%rbp)
-    movq $4096, -32(%rbp)               # menorTamanho = 4096 em -32(%rbp)    
+    movq $32, -32(%rbp)                 # menorTamanho = 32 em -32(%rbp)    
 
 while_aloca:
     movq -8(%rbp), %rax                 
     cmpq %rax, -16(%rbp)                # while posAtualHeap < topoAtualHeap
-	jge fim_while_aloca
+	jge fim_while_aloca                 # TA AQUI O ERRO
     
     movq -8(%rbp), %rbx
     movq (%rbx), %r10                   # %r10 = estado
@@ -102,11 +104,11 @@ while_aloca:
     movq %r11, -32(%rbp)                # menorTamanho = tamanho 
 
 fim_if_while:
-    shr $12, %r11                       # tamanho = tamanho / 4096
+    shr $5, %r11                       # tamanho = tamanho / 32
     addq $1, %r11                       # tamanho++
-    shl $12, %r11                       # tamanho * 4096 
+    shl $5, %r11                       # tamanho * 32
     addq $16, %r11                      # tamanho + 16
-    addq %r11, -8(%rbp)                 # posAtualHeap = tamanho                 
+    addq %r11, -8(%rbp)                 # posAtualHeap = tamanho
 
     jmp while_aloca
 
@@ -126,9 +128,9 @@ fim_while_aloca:
     
 else_bloco_livre: 
     movq -40(%rbp), %r11
-    addq $4095, %r11                    # novoTamanho = %r11 = num_bytes + 4095
-    shr $12, %r11                       # %r11 / 4096
-    shl $12, %r11                       # %r11 * 4096
+    addq $31, %r11                    # novoTamanho = %r11 = num_bytes + 4095
+    shr $5, %r11                       # %r11 / 32
+    shl $5, %r11                       # %r11 * 32
     
     movq -16(%rbp), %r10                # %r10 = topoAtalHeap
     addq %r11, %r10                     # %r10 = topoAtualHeap + novoTamanho
@@ -197,15 +199,15 @@ ta_ocupado:
 ################################################################################
 
 imprimeMapa:
-    pushq %rbp
-    movq %rsp, %rbp
+    pushq %rbp                          # salva antigo frame pointer
+    movq %rsp, %rbp                     # configura novo frame pointer
     subq $32, %rsp                      # alocando variáveis
     
     movq $12, %rax
     movq $0, %rdi
-    syscall
+    syscall                             # %rax <- topo atual da Heap
     movq %rax, -8(%rbp)                 # topoHeap = sbrk(0) em -8(%rbp)
-    movq topoInicialHeap, %rax 
+    movq topoInicialHeap, %rax
     movq %rax, -16(%rbp)                # atual = topoInicialHeap em -16(%rbp)
 
     movq $1, %rax                       # write                                 
@@ -235,9 +237,9 @@ whileMapa:
     movq $0, %rbx                       # i = 0
 
     movq -32(%rbp), %r12
-    shr $12, %r12                  # tamanho = tamanho / 4096
+    shr $5, %r12                  # tamanho = tamanho / 32
     addq $1, %r12                  # tamanho++
-    shl $12, %r12                  # tamanho * 4096 
+    shl $5, %r12                  # tamanho * 32 
 
     cmpq $0, -24(%rbp)                  # if estado == livre
     jne for_tamanho_ocup
@@ -270,9 +272,9 @@ for_tamanho_ocup:
 
 fim_fors:
     movq -32(%rbp), %rax
-    shr $12, %rax                  # tamanho = tamanho / 4096
+    shr $5, %rax                  # tamanho = tamanho / 32
     addq $1, %rax                  # tamanho++
-    shl $12, %rax                  # tamanho * 4096
+    shl $5, %rax                  # tamanho * 32
     addq $16, %rax                 # tamanho + 16
     addq %rax, -16(%rbp)           # atual  = tamanho                 
     
@@ -289,50 +291,3 @@ fim_while_mapa:
     addq $32, %rsp                      # desaloca variáveis
     popq %rbp                           # restaura %rbp
     ret 
-
-################################################################################
-
-# _start:
-#     pushq %rbp
-#     movq %rsp, %rbp    
-
-#     subq $8, %rsp                       # void* bloco1 em -8(%rbp)  
-#     subq $8, %rsp                       # void* bloco2 em -16(%rbp)
-
-#     call iniciaAlocador
-    
-#     movq $5000, %rax                     
-#     pushq %rax                          # empilha parametro
-#     call alocaMem
-#     addq $8, %rsp                       # libera espaço do parametro
-#     movq %rax, -8(%rbp)                 # retorno da função no bloco 1
-   
-#     call imprimeMapa
-
-#     movq $400, %rax                     
-#     pushq %rax                          # empilha parametro
-#     call alocaMem
-#     addq $8, %rsp                       # libera espaço do parametro
-#     movq %rax, -16(%rbp)                # retorno da função no bloco 2
-      
-#     call imprimeMapa
-
-#     movq -8(%rbp), %rax                     
-#     pushq %rax                          # empilha parametro
-#     call liberaMem
-#     addq $8, %rsp                       # libera espaço do parametro
-
-#     call imprimeMapa
-
-#     movq -16(%rbp), %rax                     
-#     pushq %rax                          # empilha parametro
-#     call liberaMem
-#     addq $8, %rsp                       # libera espaço do parametro
-    
-#     call imprimeMapa
-
-#     call finalizaAlocador
-
-#     addq $16, %rsp
-#     movq $60, %rax
-#     syscall
