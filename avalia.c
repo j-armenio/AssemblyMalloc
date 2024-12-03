@@ -1,8 +1,10 @@
 #include <stdio.h>
+#include <stdint.h>
 #include "meuAlocador.h"
 
 int main (long int argc, char** argv) {
   void *a,*b,*c,*d,*e;
+  int64_t estado;
 
   iniciaAlocador();    
   imprimeMapa();       // OK
@@ -31,7 +33,8 @@ int main (long int argc, char** argv) {
   // 6 OK
   // 2) Espero ver quatro segmentos alternando
   //    ocupados e livres
-
+    
+  estado = *((int64_t*)b-2);
   b=(void *) alocaMem(50);
   // 7
   imprimeMapa();

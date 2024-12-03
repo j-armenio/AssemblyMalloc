@@ -79,7 +79,7 @@ fim_if_num0:
     movq %rax, -16(%rbp)                # topoAtualHeap em -16(%rbp) 
     
     movq $0, -24(%rbp)                  # blocoLivre = NULL em -24(%rbp)
-    movq $0, -32(%rbp)                  # menorTamanho = 0 em -32(%rbp)    
+    movq $0, -32(%rbp)                  # maiorTamanho = 0 em -32(%rbp)    
 
 while_aloca:
     movq -8(%rbp), %rax    
@@ -101,7 +101,7 @@ while_aloca:
     cmpq $0, -32(%rbp)                  # if menor tamanho != 0
     je nn_tem_opt
     cmpq %r11, -32(%rbp)
-    jl fim_if_while                    # if tamanho < menorTamanho
+    jg fim_if_while                     # if tamanho > maiorTamanho
 
 nn_tem_opt:
     movq -8(%rbp), %rax
