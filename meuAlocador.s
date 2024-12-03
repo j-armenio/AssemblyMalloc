@@ -15,7 +15,7 @@
     aux: .quad 0
 
 .section .text
-.globl _start
+.globl iniciaAlocador, finalizaAlocador, alocaMem, liberaMem, imprimeMapa
 
 ################################################################################
 
@@ -49,21 +49,25 @@ alocaMem:
     pushq %rbp
     movq %rsp, %rbp
 
-    movq 16(%rbp), %rax
+    subq $40, %rsp
+    movq %rdi, -40(%rbp)                # tamanho em -40(%rbp)
+
+    movq %rdi, %rax
     cmpq $0, %rax                       # if num_bytes <= 0
     jg fim_if_num0
-    
+
     movq $1, %rax                       # write  
     movq $1, %rdi                       # stdout                                
     movq $erroNumBytes, %rsi            # inicio do buffer                      
     movq $28, %rdx                      # tam do buffer                         
     syscall 
    
+    addq $40, %rsp
     movq $0, %rax
     popq %rbp
     ret 
+
 fim_if_num0:
-    subq $32, %rsp                      # aloca espaço p/ variaveis locais
     movq topoInicialHeap, %rax          
     movq %rax, -8(%rbp)                 # posAtualHeap em -8(%rbp)   
     
@@ -87,7 +91,7 @@ while_aloca:
 
     cmpq $0, %r10
     jne fim_if_while                    # if estado == 0
-    movq 16(%rbp), %rax
+    movq -40(%rbp), %rax
     cmpq %r11, %rax
     jl fim_if_while                     # && tamanho >= num_bytes
     cmpq %r11, -32(%rbp)
@@ -116,12 +120,12 @@ fim_while_aloca:
     addq $16, -24(%rbp)
     movq -24(%rbp), %rax                # retorno = blocoLivre + 16
     
-    addq $32, %rsp                      # desaloca variaveis locais
+    addq $40, %rsp                      # desaloca variaveis locais
     popq %rbp                           # restaura %rbp
     ret    
     
 else_bloco_livre: 
-    movq 16(%rbp), %r11
+    movq -40(%rbp), %r11
     addq $4095, %r11                    # novoTamanho = %r11 = num_bytes + 4095
     shr $12, %r11                       # %r11 / 4096
     shl $12, %r11                       # %r11 * 4096
@@ -142,7 +146,7 @@ else_bloco_livre:
     movq $28, %rdx                      # tam do buffer                         
     syscall
 
-    addq $32, %rsp                      # desaloca variaveis
+    addq $40, %rsp                      # desaloca variaveis
     movq $0, %rax                       # retorno = NULL
     popq %rbp                           # restaura %rbp
     ret
@@ -151,12 +155,12 @@ alocou:
     movq -16(%rbp), %r10                # %r10 = novoBloco
     movq $1, (%r10)                     # estado do novoBloco = ocupado
     addq $8, %r10                       # %r10 = novoBloco + 8
-    movq 16(%rbp), %rax
+    movq -40(%rbp), %rax
     movq %rax, (%r10)                   # novoBloco + 8 = num_bytes
     
     addq $8, %r10                       # %r10 = novoBloco + 8 + 8
     movq %r10, %rax                     # retorno = novoBloco + 16
-    addq $32, %rsp                      # desaloca variaveis
+    addq $40, %rsp                      # desaloca variaveis
     popq %rbp                           # restaura %rbp
     ret
 
@@ -166,14 +170,14 @@ liberaMem:
     pushq %rbp
     movq %rsp, %rbp                     
     
-    cmpq $0, 16(%rbp)                   # if bloco
+    cmpq $0, %rdi                   # if bloco
     jne tem_bloco           
     popq %rbp                           # restaura %rbp
     movq $1, %rax                       # retorno = 1
     ret
 
 tem_bloco:
-    movq 16(%rbp), %r11
+    movq %rdi, %r11
     subq $16, %r11                      # %r11 = bloco-16
     movq (%r11), %r10                   # %r10 = estado do bloco
     
@@ -195,7 +199,7 @@ ta_ocupado:
 imprimeMapa:
     pushq %rbp
     movq %rsp, %rbp
-    subq $16, %rsp                      # alocando variáveis
+    subq $32, %rsp                      # alocando variáveis
     
     movq $12, %rax
     movq $0, %rdi
@@ -211,14 +215,16 @@ imprimeMapa:
     syscall 
 
 whileMapa:
-    movq -16(%rbp), %rax
+    movq -16(%rbp), %rax                # rax = começo do bloco 
     movq -8(%rbp), %rbx
     cmpq %rax, -8(%rbp)                 # if atual < topoHeap
-    jge fim_while_mapa    
+    jle fim_while_mapa
 
-    movq (%rax), %r10                   # %r10 = estado                         
-    addq $8, %rax                                                               
-    movq (%rax), %r11                   # %r11 = tamanho
+    movq (%rax), %rbx
+    movq %rbx, -24(%rbp)              # -24(%rbp) = estado
+    addq $8, %rax    
+    movq (%rax), %rbx                
+    movq %rbx, -32(%rbp)              # -32(%rbp) = tamanho
 
     movq $1, %rax                       # write                                 
     movq $1, %rdi                       # stdout                                
@@ -228,12 +234,17 @@ whileMapa:
 
     movq $0, %rbx                       # i = 0
 
-    cmpq $0, %r10                       # if estado == livre
+    movq -32(%rbp), %r12
+    shr $12, %r12                  # tamanho = tamanho / 4096
+    addq $1, %r12                  # tamanho++
+    shl $12, %r12                  # tamanho * 4096 
+
+    cmpq $0, -24(%rbp)                  # if estado == livre
     jne for_tamanho_ocup
 
 for_tamanho_livre:
-    cmpq %rbx, %r11                     # if i < tamanho
-    jge fim_fors
+    cmpq %rbx, %r12                # if i < tamanho
+    jle fim_fors
 
     movq $1, %rax                       # write
     movq $1, %rdi                       # stdout
@@ -242,10 +253,11 @@ for_tamanho_livre:
     syscall
 
     addq $1, %rbx                       # i++
+    jmp for_tamanho_livre
 
 for_tamanho_ocup:
-    cmpq %rbx, %r11                     # if i < taamnho
-    jge fim_fors
+    cmpq %rbx, %r12                # if i < tamanho
+    jle fim_fors
     
     movq $1, %rax                       # write                                 
     movq $1, %rdi                       # stdout                                
@@ -254,14 +266,16 @@ for_tamanho_ocup:
     syscall   
 
     addq $1, %rbx
+    jmp for_tamanho_ocup
 
-fim_fors:  
-    shr $12, %r11                       # tamanho = tamanho / 4096
-    addq $1, %r11                       # tamanho++
-    shl $12, %r11                       # tamanho * 4096 
-    addq $16, %r11                      # tamanho + 16
-    addq %r11, -16(%rbp)                # atual  = tamanho                 
-        
+fim_fors:
+    movq -32(%rbp), %rax
+    shr $12, %rax                  # tamanho = tamanho / 4096
+    addq $1, %rax                  # tamanho++
+    shl $12, %rax                  # tamanho * 4096
+    addq $16, %rax                 # tamanho + 16
+    addq %rax, -16(%rbp)           # atual  = tamanho                 
+    
     jmp whileMapa     
 
 fim_while_mapa:
@@ -270,54 +284,55 @@ fim_while_mapa:
     movq $1, %rdi                       # stdout                                
     movq $newL, %rsi                    # inicio do buffer                      
     movq $3, %rdx                       # tam do buffer                         
-    syscall 
+    syscall
 
-    addq $16, %rsp                      # desaloca variáveis
+    addq $32, %rsp                      # desaloca variáveis
     popq %rbp                           # restaura %rbp
     ret 
 
 ################################################################################
-_start:
-    pushq %rbp
-    movq %rsp, %rbp    
 
-    subq $8, %rsp                       # void* bloco1 em -8(%rbp)  
-    subq $8, %rsp                       # void* bloco2 em -16(%rbp)
+# _start:
+#     pushq %rbp
+#     movq %rsp, %rbp    
 
-    call iniciaAlocador
+#     subq $8, %rsp                       # void* bloco1 em -8(%rbp)  
+#     subq $8, %rsp                       # void* bloco2 em -16(%rbp)
+
+#     call iniciaAlocador
     
-    movq $500, %rax                     
-    pushq %rax                          # empilha parametro
-    call alocaMem
-    addq $8, %rsp                       # libera espaço do parametro
-    movq %rax, -8(%rbp)                 # retorno da função no bloco 1
+#     movq $5000, %rax                     
+#     pushq %rax                          # empilha parametro
+#     call alocaMem
+#     addq $8, %rsp                       # libera espaço do parametro
+#     movq %rax, -8(%rbp)                 # retorno da função no bloco 1
    
-    call imprimeMapa
+#     call imprimeMapa
 
-    movq $400, %rax                     
-    pushq %rax                          # empilha parametro
-    call alocaMem
-    addq $8, %rsp                       # libera espaço do parametro
-    movq %rax, -16(%rbp)                # retorno da função no bloco 2
+#     movq $400, %rax                     
+#     pushq %rax                          # empilha parametro
+#     call alocaMem
+#     addq $8, %rsp                       # libera espaço do parametro
+#     movq %rax, -16(%rbp)                # retorno da função no bloco 2
       
-    call imprimeMapa
+#     call imprimeMapa
 
-    movq -8(%rbp), %rax                     
-    pushq %rax                          # empilha parametro
-    call liberaMem
-    addq $8, %rsp                       # libera espaço do parametro
+#     movq -8(%rbp), %rax                     
+#     pushq %rax                          # empilha parametro
+#     call liberaMem
+#     addq $8, %rsp                       # libera espaço do parametro
 
-    call imprimeMapa
+#     call imprimeMapa
 
-    movq -16(%rbp), %rax                     
-    pushq %rax                          # empilha parametro
-    call liberaMem
-    addq $8, %rsp                       # libera espaço do parametro
+#     movq -16(%rbp), %rax                     
+#     pushq %rax                          # empilha parametro
+#     call liberaMem
+#     addq $8, %rsp                       # libera espaço do parametro
     
-    call imprimeMapa
+#     call imprimeMapa
 
-    call finalizaAlocador
+#     call finalizaAlocador
 
-    addq $16, %rsp
-    movq $60, %rax
-    syscall
+#     addq $16, %rsp
+#     movq $60, %rax
+#     syscall
